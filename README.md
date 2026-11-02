@@ -33,7 +33,8 @@ This checks packaging; live collection also needs the runtime contract below.
 
 The collector is designed for a dedicated, read-only container with:
 
-- Docker's `journald` logging driver enabled for each container to collect.
+- Docker's `journald` logging driver enabled for each container to collect;
+  the qualified deployment uses non-blocking mode with an 8 MiB buffer.
 - Read-only journal directories, machine identity, and `/dev/kmsg` access.
 - A dedicated writable state volume for cursors, redaction state, and queueing.
 - An 80 MiB private tmpfs at `/run/collector` for raw partial reconstruction.

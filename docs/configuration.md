@@ -44,6 +44,10 @@ With no checkpoint it reads all available history, then follows new records.
 Docker's non-blocking logger can drop records before they reach journald;
 size its buffer for the expected burst and logical-line sizes. The collector
 cannot recover records dropped by Docker itself.
+The qualified deployment uses `mode=non-blocking` and `max-buffer-size=8m`
+for every producer and both collectors, with bounded Docker read-cache
+options. A 1 MiB non-blocking buffer lost part of the 2 MiB fixture before
+the journal reader could receive it; it does not pass that qualification.
 Container name supplies `service`; journal priority distinguishes `stdout`
 and `stderr`. Ordered Docker partials are joined as bytes with no inserted
 newline, then decoded as one logical entry.
