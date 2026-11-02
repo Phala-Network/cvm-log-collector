@@ -1,7 +1,7 @@
 # Configuration and delivery limits
 
-This documents the current `v0.1.0` candidate. Interfaces and limits remain
-subject to the focused release tests.
+This documents `v0.1.0`. Its release notes identify the exact tested source
+commit and immutable image. Target CVM acceptance remains a deployment step.
 
 ## Configuration
 
@@ -41,6 +41,9 @@ interfaces, and are not substitutes for qualifying live kernel access.
 Docker must use the `journald` logging driver. The collector discovers both
 volatile and persistent journals and selects records with `CONTAINER_ID_FULL`.
 With no checkpoint it reads all available history, then follows new records.
+Docker's non-blocking logger can drop records before they reach journald;
+size its buffer for the expected burst and logical-line sizes. The collector
+cannot recover records dropped by Docker itself.
 Container name supplies `service`; journal priority distinguishes `stdout`
 and `stderr`. Ordered Docker partials are joined as bytes with no inserted
 newline, then decoded as one logical entry.
@@ -71,7 +74,7 @@ payloads are not preserved byte for byte.
 
 ## State and boundaries
 
-The candidate supports logical entries up to 32 MiB, up to 128 concurrent
+The release supports logical entries up to 32 MiB, up to 128 concurrent
 partial sequences, and up to 64 MiB of pending raw partial bytes. Raw partials
 use anonymous temporary files in the configured tmpfs. Persisted SQLite state
 contains sanitized packets, checkpoints, and boolean private-key context.

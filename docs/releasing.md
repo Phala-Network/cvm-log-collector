@@ -1,7 +1,9 @@
 # Releasing CVM Log Collector
 
 Maintain source on `main` and use immutable `vMAJOR.MINOR.PATCH` tags. The
-initial candidate version is `v0.1.0`; it is not a published version.
+current published version is `v0.1.0`. Its source tag identifies the tested
+build commit; later documentation commits do not move that tag or change the
+published runtime bytes.
 
 ## Qualify one candidate
 
