@@ -34,6 +34,7 @@ CHUNK_BYTES = 240 * 1024
 MAX_ENTRY_BYTES = 32 * 1024 * 1024
 MAX_PENDING_BYTES = 64 * 1024 * 1024
 MAX_PARTIAL_STREAMS = 128
+CIRCUIT_RETRY_SECONDS = 300
 PEM_BEGIN = re.compile(r'-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----')
 PEM_END = re.compile(r'-----END (?:[A-Z0-9]+ )*PRIVATE KEY-----')
 JOURNAL_FIELDS = ','.join(('MESSAGE', '__CURSOR', '__REALTIME_TIMESTAMP',
@@ -381,10 +382,18 @@ class Sender:
         self.api_url, self.metrics_url = api_url, metrics_url
         self.last_dropped = store.get('last_dropped_counter', 0.0)
         self.resume_once = store.circuit()
+        self.retry_at = None
 
     def check_circuit(self):
         if self.store.circuit() and not self.resume_once:
-            return False
+            # Probe a latched circuit periodically so that a receiver repaired
+            # after the rejection (e.g. a route registered after CVM start)
+            # recovers without a restart; a persistent rejection re-latches and
+            # costs one probe per interval.
+            if self.retry_at is None or time.monotonic() < self.retry_at:
+                return False
+            self.retry_at = None
+            self.resume_once = True
         try:
             with urllib.request.urlopen(self.metrics_url, timeout=2) as response:
                 text = response.read(8 * 1024 * 1024).decode()
@@ -392,9 +401,8 @@ class Sender:
         except (OSError, urllib.error.URLError):
             return False
         if self.resume_once:
-            # A controlled helper/CVM restart after repairing the endpoint is
-            # the no-admin-port recovery path. Rebaseline once; a new permanent
-            # rejection latches again and does not auto-clear in this process.
+            # Startup or a periodic probe: rebaseline once; a new permanent
+            # rejection latches again until the next probe.
             with self.store.lock, self.store.db:
                 self.store.set('last_dropped_counter', dropped)
                 self.store.set('delivery_circuit', False)
@@ -408,6 +416,7 @@ class Sender:
             with self.store.lock, self.store.db:
                 self.store.set('last_dropped_counter', dropped)
                 self.store.set('delivery_circuit', True)
+            self.retry_at = time.monotonic() + CIRCUIT_RETRY_SECONDS
             return False
         self.last_dropped = dropped
         with self.store.lock, self.store.db:
