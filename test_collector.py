@@ -2,9 +2,11 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
+import threading
 import unittest
+from unittest import mock
 
-from collector import BoundaryError, Processor, Store, redact_pem, split_utf8, timestamp_ns
+from collector import CIRCUIT_RETRY_SECONDS, BoundaryError, Processor, Sender, Store, redact_pem, split_utf8, timestamp_ns
 from credentials_only import sanitize_for_test
 
 
@@ -148,6 +150,25 @@ class CollectorTest(unittest.TestCase):
         self.assertEqual(self.packets()[0]['streams'][0]['values'][0][0], '1123456000')
         self.assertEqual(self.packets()[0]['streams'][0]['stream']['stream'], 'kernel')
         self.assertFalse(self.store.get('kernel_checkpoint')['pem'])
+
+
+    def test_latched_circuit_is_probed_periodically(self):
+        dropped, now = [0], [1000.0]
+        def metrics(*_args, **_kwargs):
+            return mock.MagicMock(**{'__enter__.return_value.read.return_value':
+                                     f'loki_write_dropped_entries_total {dropped[0]}\n'.encode()})
+        sender = Sender(self.store, threading.Event(), 'http://127.0.0.1:15140/loki/api/v1/push',
+                        'http://127.0.0.1:12345/metrics')
+        with mock.patch('urllib.request.urlopen', metrics), mock.patch('time.monotonic', lambda: now[0]):
+            self.assertTrue(sender.check_circuit())
+            dropped[0] = 3
+            self.assertFalse(sender.check_circuit())
+            self.assertTrue(self.store.circuit())
+            now[0] += CIRCUIT_RETRY_SECONDS - 1
+            self.assertFalse(sender.check_circuit())
+            now[0] += 1
+            self.assertTrue(sender.check_circuit())
+            self.assertFalse(self.store.circuit())
 
 
 if __name__ == '__main__':

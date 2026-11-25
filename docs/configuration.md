@@ -110,12 +110,12 @@ query through the intended receiver.
 
 Use a dedicated Alloy writer so its `loki_write_dropped_entries_total` describes
 this collector's output. A rise in that counter latches the delivery circuit,
-retaining later queued fragments until operator repair and `--clear-circuit`.
-This stops a permanent failure from causing an endless chain of failing
-collector-log deliveries. After repairing the endpoint, clear the latch with
-`--clear-circuit`, or perform one controlled helper/CVM restart. On startup a
-persisted latch receives one probe after Alloy metrics become reachable: the
-collector resets the drop-counter baseline and tries sending again. A new
-permanent rejection latches it again for that process; it does not continuously
-auto-clear. This mechanism cannot recover entries that Alloy already
+retaining later queued fragments. This stops a permanent failure from causing an
+endless chain of failing collector-log deliveries. A latched circuit is probed
+every 5 minutes, and once at startup after Alloy metrics become reachable: the
+collector resets the drop-counter baseline and tries sending again. A receiver
+repaired after the rejection, for example a route registered after the CVM
+started, therefore recovers without a restart; a persistent rejection latches
+again until the next probe. `--clear-circuit` clears the latch immediately.
+This mechanism cannot recover entries that Alloy already
 acknowledged locally and then dropped.
